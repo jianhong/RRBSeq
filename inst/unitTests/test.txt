@@ -1,0 +1,131 @@
+library(GenomicRanges)
+
+rd <- RangedData(
+      RangesList(
+           chrA=IRanges(start=c(1, 4, 6,8,10,100,200,220,250,300, 600), width= rep(1,11)),
+           chrB=IRanges(start=c(1, 3, 6), width=c(3, 3, 4))),
+        methyC=c(2, 7, 3, 1, 1, 1,3,6,7,9,1,1,1,1), methyC.2=c(2, 7, 3, 1, 1, 1,3,6,7,9,1,1,1,1),
+	totalC=c(5,10,10,10,9,8,12,20,30,16,10,10,10,10), totalC2=c(5,10,10,10,9,8,12,20,30,16,10,10,10,10))
+rd
+
+gr <- as(rd, "GRanges")
+ mcols(gr)$ratio = mcols(gr)$methyC/mcols(gr)$totalC
+mcols(gr)$ratio2 = mcols(gr)$methyC.2/mcols(gr)$totalC2
+
+mcols(gr)$methyC
+
+as.data.frame(gr)
+   seqnames start end width strand methyC totalC     ratio
+1      chrA     1   1     1      *      2      5 0.4000000
+2      chrA     4   4     1      *      7     10 0.7000000
+3      chrA     6   6     1      *      3     10 0.3000000
+4      chrA     8   8     1      *      1     10 0.1000000
+5      chrA    10  10     1      *      1      9 0.1111111
+6      chrA   100 100     1      *      1      8 0.1250000
+7      chrA   200 200     1      *      3     12 0.2500000
+8      chrA   220 220     1      *      6     20 0.3000000
+9      chrA   250 250     1      *      7     30 0.2333333
+10     chrA   300 300     1      *      9     16 0.5625000
+11     chrB     1   3     3      *      1     10 0.1000000
+12     chrB     3   5     3      *      1     10 0.1000000
+13     chrB     6   9     4      *      1     10 0.1000000
+
+source("~/scratch/RRBseq/summarize.sliding.window2.R")
+
+summarize.sliding.window(gr, summarize= "total.methyC.over.total.totalC", file="testMeanMvsTotal.txt")
+Mon Sep 16 11:05:13 2013 Done with reading in summary, creating GRanges for the summary ...
+GRanges with 11 ranges and 6 metadata columns:
+       seqnames     ranges strand   | methyC.V3 methyC.V4 totalC.V5 totalC.V6
+          <Rle>  <IRanges>  <Rle>   | <integer> <integer> <integer> <integer>
+   [1]     chrA [  1, 200]      *   |        18        18        64        64
+   [2]     chrB [  1, 200]      *   |         3         3        30        30
+   [3]     chrA [ 51, 250]      *   |        17        17        70        70
+   [4]     chrA [101, 300]      *   |        25        25        78        78
+   [5]     chrA [151, 350]      *   |        25        25        78        78
+   ...      ...        ...    ... ...       ...       ...       ...       ...
+   [7]     chrA [251, 450]      *   |         9         9        16        16
+   [8]     chrA [401, 600]      *   |         1         1        10        10
+   [9]     chrA [451, 650]      *   |         1         1        10        10
+  [10]     chrA [501, 700]      *   |         1         1        10        10
+  [11]     chrA [551, 750]      *   |         1         1        10        10
+                ratio.V7          ratio.V8
+               <numeric>         <numeric>
+   [1]           0.28125           0.28125
+   [2]               0.1               0.1
+   [3] 0.242857142857143 0.242857142857143
+   [4] 0.320512820512821 0.320512820512821
+   [5] 0.320512820512821 0.320512820512821
+   ...               ...               ...
+   [7]            0.5625            0.5625
+   [8]               0.1               0.1
+   [9]               0.1               0.1
+  [10]               0.1               0.1
+  [11]               0.1               0.1
+  ---
+  seqlengths:
+   chrA chrB
+     NA   NA
+
+summarize.sliding.window(gr, window.size =200L, step=50L, summarize="mean.ratio", file="testMeanRatio.txt")
+  GRanges with 11 ranges and 6 metadata columns:
+       seqnames     ranges strand   | methyC.V3 methyC.V4 totalC.V5 totalC.V6
+          <Rle>  <IRanges>  <Rle>   | <integer> <integer> <integer> <integer>
+   [1]     chrA [  1, 200]      *   |        18        18        64        64
+   [2]     chrB [  1, 200]      *   |         3         3        30        30
+   [3]     chrA [ 51, 250]      *   |        17        17        70        70
+   [4]     chrA [101, 300]      *   |        25        25        78        78
+   [5]     chrA [151, 350]      *   |        25        25        78        78
+ [6]      chrA [201, 400]      * |        22        22        66        66
+   [7]     chrA [251, 450]      *   |         9         9        16        16
+   [8]     chrA [401, 600]      *   |         1         1        10        10
+   [9]     chrA [451, 650]      *   |         1         1        10        10
+  [10]     chrA [501, 700]      *   |         1         1        10        10
+  [11]     chrA [551, 750]      *   |         1         1        10        10
+                ratio.V7          ratio.V8
+               <numeric>         <numeric>
+   [1]           0.28125           0.28125
+   [2]               0.1               0.1
+   [3] 0.242857142857143 0.242857142857143
+   [4] 0.320512820512821 0.320512820512821
+   [5] 0.320512820512821 0.320512820512821
+   [6] 0.333333333333333 0.333333333333333
+   [7]            0.5625            0.5625
+   [8]               0.1               0.1
+   [9]               0.1               0.1
+  [10]               0.1               0.1
+  [11]               0.1               0.1
+
+
+Mon Sep 16 11:03:14 2013 Done with reading in summary, creating GRanges for the summary ...
+GRanges with 11 ranges and 6 metadata columns:
+       seqnames     ranges strand   | methyC.V3 methyC.V4 totalC.V5 totalC.V6
+          <Rle>  <IRanges>  <Rle>   | <integer> <integer> <integer> <integer>
+   [1]     chrA [  1, 200]      *   |        18        18        64        64
+   [2]     chrB [  1, 200]      *   |         3         3        30        30
+   [3]     chrA [ 51, 250]      *   |        17        17        70        70
+   [4]     chrA [101, 300]      *   |        25        25        78        78
+   [5]     chrA [151, 350]      *   |        25        25        78        78
+   [6]    chrA[201, 400]       *   |    22      22    ...   66  ...    66   ...
+   [7]     chrA [251, 450]      *   |         9         9        16        16
+   [8]     chrA [401, 600]      *   |         1         1        10        10
+   [9]     chrA [451, 650]      *   |         1         1        10        10
+  [10]     chrA [501, 700]      *   |         1         1        10        10
+  [11]     chrA [551, 750]      *   |         1         1        10        10
+                ratio.V7          ratio.V8
+               <numeric>         <numeric>
+   [1] 0.283742857142857 0.283742857142857
+   [2]               0.1               0.1
+   [3]            0.2271            0.2271
+   [4]          0.336475          0.336475
+   [5]          0.336475          0.336475
+ [6]           0.3653            0.3653
+   [7]            0.5625            0.5625
+   [8]               0.1               0.1
+   [9]               0.1               0.1
+  [10]               0.1               0.1
+  [11]               0.1               0.1
+  ---
+  seqlengths:
+   chrA chrB
+     NA   NA
+

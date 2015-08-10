@@ -1,0 +1,349 @@
+Package: Methy-Seq
+
+1. Read in data to Genomic Ranges
+First support RRBseq 
+
+library(GenomicRanges)
+library(preprocessCore)
+library(limma)
+
+
+prepareInputData <- function(methyRatioFiles, ind.chr=1L, ind.pos=2L,  ind.strand =3L, ind.totalC=6L, ind.methyC=7L, ind.ratio=5L, min.totalC = 5L, ...)
+{
+	if (min.totalC < 1)
+	{
+		warning("min.totalC needs to be at least 1, so automatically set to 1")
+		min.totalC = 1
+	}
+	allInputData = list()
+	for (i in 1:length(methyRatioFiles))
+	{
+		x = read.table(methyRatioFiles[i], ...)
+		allInputData[[i]] = x[, c(ind.chr, ind.pos, ind.strand, ind.totalC, ind.methyC, ind.ratio)]
+	}
+	mergedData = allInputData[[1]]
+	for (i in 2:length(methyRatioFiles))
+	{
+		mergedData = merge(mergedData, allInputData[[i]], ...)
+	}
+	ind.methyC = numeric()
+	ind.totalC = numeric()
+	ind.ratio = numeric()
+	for (i in 1:length(methyRatioFiles))
+	{
+		ind1 = 3* i +  1
+		ind2 = ind1 + 1
+		ind3 = ind2 + 1
+		ind.totalC = c(ind.totalC, ind1)
+		ind.methyC = c(ind.methyC, ind2)
+		ind.ratio = c(ind.ratio, ind3)
+		mergedData = subset(mergedData, as.numeric(as.character(mergedData[[,ind1]])) >= min.totalC)
+	}
+	GR  = GRanges(IRanges(start=as.numeric(as.character(mergedData[ , ind.pos])), width= rep(1, dim(temp)[1])),  seqnames=mergedData[, ind.chr],  methyC= mergedData[, ind.methyC], totalC=  mergedData[ , ind.totalC], ratio = mergedData[, ind.ratio])
+	GR
+}
+
+
+2. transform data
+
+transformData <- function(gr, transformation="asin")
+{
+	samples = grep("ratio", colnames(mcols(gr)))
+	totalC.ind = grep("totalC", colnames(mcols(gr)))
+	#mcols(gr)$ratio[mcols(gr)$ratio==0] = 1 / (4 *mcols(gr)$totalC[mcols(gr)$ratio==0,)
+	#mcols(gr)$ratio[mcols(gr)$ratio]==1] = 1 - 1 / (4 *mcols(gr)$totalC[mcols(gr)$ratio==1,])
+	for (i in 1:length(samples))
+	{
+		mcols(gr)[mcols(gr)[,samples[i]]==0,samples[i]] = 1 / (4 *mcols(gr)[mcols(gr)[,samples[i]]==0,totalC.ind[i]])
+		mcols(gr)[mcols(gr)[,samples[i]]==1, samples[i]] = 1 - 1 / (4 *mcols(gr)[mcols(gr)[,samples[i]]==1,totalC.ind[i]])
+	}
+	if (transformation == "asin")
+	{
+		#mcols(gr)$ratio = asin(sqrt(mcols(gr)$ratio))
+		for (i in samples)
+			mcols(gr)[,i] = asin(sqrt(mcols(gr)[,i]))
+	}
+	 if (transformation == "log2")
+       	 {
+		for (i in samples)
+			mcols(gr)[,i] = log2(mcols(gr)[,i])
+		#mcols(gr)$ratio = log2(mcols(gr)$ratio)
+
+	}
+	gr
+}
+
+
+3. normalize Data -- justification for normalization? Normalization is the process of removing non-biological variability between runs
+
+
+normalizeData <- function(gr, method=c("none", "quantiles", "quantiles.robust", "mean", "median"),  ... )
+{
+	exprs = mcols(gr)[, grep("ratio", colnames(mcols(gr)))]
+	methyC = mcols(gr)[, grep("methyC", colnames(mcols(gr)))]
+	totalC = mcols(gr)[, grep("totalC", colnames(mcols(gr)))]
+		
+	rownames(methyC) = paste(as.character(seqnames(gr[[1]])), as.character(start(gr[[1]])), as.character(end(gr[[1]])), sep="-")
+	rownames(totalC) = paste(as.character(seqnames(gr[[1]])), as.character(start(gr[[1]])), as.character(end(gr[[1]])), sep="-")
+	if (method == "quantile")
+	{
+		exprs  = normalize.quantiles(exprs)
+	}
+	else if (method == "quantiles.robust")
+	{
+		exprs  = normalize.quantiles.robust(exprs, ...)
+	}
+	else if (method == "mean")
+	{
+		avgs = colSummarizeAvg(exprs)$Estimates
+		scaling.factors = avgs /avgs[1]
+		scaling.factors = matrix(rep(scaling.factors, dim(exprs)[1]), ncol = length(scaling.factors), byrow=TRUE)
+		exprs = exprs /scaling.factors
+	}
+	else if (method == "median")
+	{
+		avgs= colSummarizeMedian(exprs)$Estimates
+		scaling.factors = avgs /avgs[1]
+		scaling.factors = matrix(rep(scaling.factors, dim(exprs)[1]), ncol = length(scaling.factors), byrow=TRUE)
+		exprs = exprs /scaling.factors
+	}
+
+	rownames(exprs) = paste(as.character(seqnames(gr[[1]])), as.character(start(gr[[1]])), as.character(end(gr[[1]])), sep="-")
+	list(exprs = exprs,  methyC=methyC, totalC = totalC)
+}
+
+
+3. global level methylation analysis, summarize each column as mean, median, turkey biweight, medianPolish etc, then compare where there is difference between treatment genome-wide - preprocessCore
+colSummarizeBiweightSummarize each column using a one step Tukey Biweight procedure
+compareGenomeWide <-function(gr, estimate.method=c("mean", "median", "turkeyBiweight", "medianPolish"), design)
+{
+
+}
+colSummarizeMedianpolishUse the median polish to summarize each column, by also using a row effect (not returned)
+
+4. Computer sliding window methylation, using sum methyC/ total methyC, median ratio, median polish, mean ratio, turkey biweight to estimate the ratio for a sliding window.
+####### summary(gt5.wt.T21.2[mcols(gt5.wt.T21.2)$ratio >0.8,]$totalC)
+ ###   Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+ ###    5.0     15.0     43.0    114.3    116.0 510300.0 
+### summary(gt5.wt.T21.2[mcols(gt5.wt.T21.2)$ratio <0.2,]$totalC)
+ ###  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+ ###     5      96     434    1341    1579 2547000 
+### it is interesting to note that higher methylation is negatively correlated with number of Cs sequenced (totalC), maybe highly methylated C is less accessible? If so, cannot use total.methyC.over.total.totalC for summarization over window or CpG island
+summarize.sliding.window <- function(gr, window.size =200L, step=50L, summarize=c("mean.ratio", "total.methyC.over.total.totalC"))
+{
+	cat(date(), "Validating input ...\n");
+	 summarize = match.arg(summarize)
+	if (missing(gr)) {
+        stop("Missing required argument gr!")
+    }
+    if (class(gr) != "GRanges" ) {
+        stop("No valid gr passed in. It needs to be GRanges object")
+    }
+    if ( class(window.size) != "integer" || window.size < 2) {
+        stop("window.size needs to be an integer greater than 1")
+    }
+	if ( class(step) != "integer" || step > window.size) {
+        stop("step needs to be an integer less or equal to window")
+    }
+
+	steps.per.window = window.size / step - 1
+	binned = data.frame()
+	
+	n.samples = dim(mcols(gr)[, grep("totalC", colnames(mcols(gr)))])[2]
+	
+	if (mode(n.samples) == "NULL") { n.samples = 1}
+	for (i in 0:steps.per.window)
+	{
+		  window.start = i * step + 1
+		binned = rbind(binned,do.call(rbind, lapply(unique(as.character(seqnames(gr))), function(chr) 
+		{
+			cat(date(), "summarizing sliding window for chromosome", chr, " ...\n");
+			temp = subset(gr, as.character(seqnames(gr))==chr & start(gr) >= window.start)
+			if (length(temp) >0)
+			{
+				last.breaks = ceiling((max(start(temp)) - window.start)/window.size) * window.size + window.start
+				breaks = seq(from=window.start, to = last.breaks , by=window.size)
+				if  (length(breaks) > 1)
+				{
+					methyC = matrix()
+					totalC = matrix()
+					ratio = matrix()
+					this.methyC = mcols(temp)[, grep("methyC", colnames(mcols(temp)))]
+					this.totalC = mcols(temp)[, grep("totalC", colnames(mcols(temp)))]
+					this.ratio = mcols(temp)[, grep("ratio", colnames(mcols(temp)))]
+					
+					for (k in 1:n.samples)
+					{
+						if (n.samples > 1)
+						{
+						hist.methyC = hist(rep(start(temp), this.methyC[,k]), breaks= breaks, plot=FALSE)
+						hist.totalC = hist(rep(start(temp), this.totalC[,k]), breaks= breaks, plot=FALSE)
+						}
+						else
+						{
+						hist.methyC = hist(rep(start(temp), this.methyC), breaks= breaks, plot=FALSE)
+						hist.totalC = hist(rep(start(temp), this.totalC), breaks= breaks, plot=FALSE)
+						}
+						if (k >1)
+						{
+							methyC = cbind(methyC, hist.methyC$counts)
+							totalC = cbind(totalC, hist.totalC$counts)
+						}
+						else
+						{
+							methyC = hist.methyC$counts
+							totalC = hist.totalC$counts
+						}
+						if (summarize == "mean.ratio")
+						{
+							if (n.samples > 1)
+							{
+							hist.ratio = hist(rep(start(temp), round(ceiling(this.ratio[,k] * 10000), 0)), breaks= breaks, plot=FALSE)
+							}
+							else
+							{
+							hist.ratio = hist(rep(start(temp), round(ceiling(this.ratio * 10000), 0)), breaks= breaks, plot=FALSE)
+							}
+							hist.nC = hist(start(temp), breaks= breaks, plot=FALSE)
+							if (k >1)
+								ratio = cbind(ratio, hist.ratio$counts/10000/hist.nC$counts)
+							else
+								ratio = hist.ratio$counts/10000/hist.nC$counts
+						}
+						else if (summarize == "total.methyC.over.total.totalC")
+						{
+							if (k >1)
+								ratio = cbind(ratio, hist.methyC$counts / hist.totalC$counts)
+							else
+								ratio = hist.methyC$counts / hist.totalC$counts
+						}
+					}  ### end for samples
+					cbind(rep(chr, length(hist.methyC$mids)), hist.methyC$mids, methyC, totalC, ratio)
+				} #### end if breaks > 1
+			} ### end if length(temp) >0
+			})))
+	} ### end for loop windows
+
+	temp = binned[order(as.numeric(as.character(binned[,2]))),]
+	last.methyC = n.samples + 2
+	first.totalC = last.methyC + 1
+	last.totalC = last.methyC + n.samples
+	first.ratio = last.totalC + 1
+	last.ratio = last.totalC + n.samples
+
+	GRanges(IRanges(start=as.numeric(as.character(temp[,2])) - window.size/2, width= rep(window.size,dim(temp)[1])),    seqnames=temp[,1],  methyC= temp[,3:last.methyC], totalC= temp[,first.totalC:last.totalC], ratio= temp[,first.ratio:last.ratio])
+}
+	
+
+load('~/Documents/hiseq/MichaelGreen/IchiroOnoyama/RRBseq/singleCpG/BrafWTsingleCpG.RData')
+rm(list = ls()[ls() != "methySummary"])
+ls()
+#[1] "methySummary"
+ names(methySummary)
+# [1] "chr"                "pos"                "strand"             "context"            "ratio.Braf.T0.3"   
+# [6] "total_C.Braf.T0.3"  "methy_C.Braf.T0.3"  "ratio.Braf.T0.2"    "total_C.Braf.T0.2"  "methy_C.Braf.T0.2" 
+#[11] "ratio.Braf.T0.1"    "total_C.Braf.T0.1"  "methy_C.Braf.T0.1"  "ratio.Braf.T14.3"   "total_C.Braf.T14.3"
+#[16] "methy_C.Braf.T14.3" "ratio.Braf.T14.2"   "total_C.Braf.T14.2" "methy_C.Braf.T14.2" "ratio.Braf.T14.1"  
+#[21] "total_C.Braf.T14.1" "methy_C.Braf.T14.1" "ratio.Braf.T21.3"   "total_C.Braf.T21.3" "methy_C.Braf.T21.3"
+#[26] "ratio.Braf.T21.2"   "total_C.Braf.T21.2" "methy_C.Braf.T21.2" "ratio.Braf.T21.1"   "total_C.Braf.T21.1"
+#[31] "methy_C.Braf.T21.1" "ratio.wt.T0.3"      "total_C.wt.T0.3"    "methy_C.wt.T0.3"    "ratio.wt.T0.2"     
+#[36] "total_C.wt.T0.2"    "methy_C.wt.T0.2"    "ratio.wt.T0.1"      "total_C.wt.T0.1"    "methy_C.wt.T0.1"   
+#[41] "ratio.wt.T14.3"     "total_C.wt.T14.3"   "methy_C.wt.T14.3"   "ratio.wt.T14.2"     "total_C.wt.T14.2"  
+#[46] "methy_C.wt.T14.2"   "ratio.wt.T14.1"     "total_C.wt.T14.1"   "methy_C.wt.T14.1"   "ratio.wt.T21.3"    
+#[51] "total_C.wt.T21.3"   "methy_C.wt.T21.3"   "ratio.wt.T21.2"     "total_C.wt.T21.2"   "methy_C.wt.T21.2"  
+#[56] "ratio.wt.T21.1"     "total_C.wt.T21.1"   "methy_C.wt.T21.1"  
+gr.braf = GRanges(IRanges(start=as.numeric(as.character(methySummary[,2])), width=rep(1, dim(methySummary)[1])), seqnames=methySummary[,1],
+methyC =   data.frame(methySummary[, grep("methy_C", colnames(methySummary))]), 
+totalC =  data.frame(methySummary[, grep("total_C", colnames(methySummary))]), ratio =  data.frame(methySummary[, grep("ratio", colnames(methySummary))]))
+
+#ratio = do.call(cbind.data.frame, methySummary[1:10, grep("ratio", c(colnames(methySummary)))])
+#totalC =  do.call(cbind.data.frame,methySummary[1:10, grep("total_C", c(colnames(methySummary)))])
+#methyC =   do.call(cbind.data.frame,methySummary[1:10, grep("methy_C", c(colnames(methySummary)))])
+
+#gr.braf = #GRanges(IRanges(start=as.numeric(as.character(methySummary[1:10,2])), width=rep(1, 10)), seqnames=methySummary[1:10,1],
+methyC =   methyC, 
+totalC =  totalC, ratio = ratio)
+
+gr.braf.t = transformData(gr.braf, transformation="asin")
+
+braf.window.meanRatio = summarize.sliding.window(gr.braf.t, window.size =200L, step=50L, summarize="mean.ratio")
+
+#braf.window.RatioTotalC = summarize.sliding.window(gr.braf.t, window.size =200L, step=50L, summarize=""total.methyC.over.total.totalC"")
+
+braf.window.meanRatio.T14minusT0 = braf.window.meanRatio
+mcols(braf.window.meanRatio.minusT0)$ratio = cbind(mcols(braf.window.meanRatio)$ratio[,4] - mcols(braf.window.meanRatio)$ratio[,1],mcols(braf.window.meanRatio)$ratio[,5] - mcols(braf.window.meanRatio)$ratio[,2], mcols(braf.window.meanRatio)$ratio[,6] - mcols(braf.window.meanRatio)$ratio[,3] , mcols(braf.window.meanRatio)$ratio[,13] - mcols(braf.window.meanRatio)$ratio[,10],mcols(braf.window.meanRatio)$ratio[,14] - mcols(braf.window.meanRatio)$ratio[,11], mcols(braf.window.meanRatio)$ratio[,15] - mcols(braf.window.meanRatio)$ratio[,12])
+
+mcols(braf.window.meanRatio.T14minusT0)$methyC = cbind(mcols(braf.window.meanRatio)$methyC[,4] ,mcols(braf.window.meanRatio)$methyC[,5], mcols(braf.window.meanRatio)$methyC[,6]  , mcols(braf.window.meanRatio)$methyC[,13], mcols(braf.window.meanRatio)$methyC[,14], mcols(braf.window.meanRatio)$methyC[,15])
+
+mcols(braf.window.meanRatio.T14minusT0)$totalC = cbind(mcols(braf.window.meanRatio)$totalC[,4] ,mcols(braf.window.meanRatio)$totalC[,5], mcols(braf.window.meanRatio)$totalC[,6]  , mcols(braf.window.meanRatio)$totalC[,13], mcols(braf.window.meanRatio)$totalC[,14], mcols(braf.window.meanRatio)$totalC[,15])
+
+
+braf.window.meanRatio.T21minusT0 = braf.window.meanRatio
+mcols(braf.window.meanRatio.minusT0)$ratio = cbind(mcols(braf.window.meanRatio)$ratio[,7] - mcols(braf.window.meanRatio)$ratio[,1],mcols(braf.window.meanRatio)$ratio[,8] - mcols(braf.window.meanRatio)$ratio[,2], mcols(braf.window.meanRatio)$ratio[,9] - mcols(braf.window.meanRatio)$ratio[,3] , mcols(braf.window.meanRatio)$ratio[,16] - mcols(braf.window.meanRatio)$ratio[,10],mcols(braf.window.meanRatio)$ratio[,17] - mcols(braf.window.meanRatio)$ratio[,11], mcols(braf.window.meanRatio)$ratio[,18] - mcols(braf.window.meanRatio)$ratio[,12])
+
+mcols(braf.window.meanRatio.T21minusT0)$methyC = cbind(mcols(braf.window.meanRatio)$methyC[,7] ,mcols(braf.window.meanRatio)$methyC[,8], mcols(braf.window.meanRatio)$methyC[,9]  , mcols(braf.window.meanRatio)$methyC[,16], mcols(braf.window.meanRatio)$methyC[,17], mcols(braf.window.meanRatio)$methyC[,18])
+
+mcols(braf.window.meanRatio.T21minusT0)$totalC = cbind(mcols(braf.window.meanRatio)$totalC[,7] ,mcols(braf.window.meanRatio)$totalC[,8], mcols(braf.window.meanRatio)$totalC[,9]  , mcols(braf.window.meanRatio)$totalC[,16], mcols(braf.window.meanRatio)$totalC[,17], mcols(braf.window.meanRatio)$totalC[,18])
+
+
+
+compareMethylation <-
+function(gr, gr.names,Treatment, norm.method=c("none", "quantiles", "quantiles.robust", "mean", "median"),design, ...)
+{
+	if(missing(gr))
+	{
+		stop("gr is required!")
+	}
+	if (class(gr) != "GRanges" ) {
+        stop("No valid gr passed in. It needs to be GRanges object")
+    }
+
+	if (length(design) ==0)
+	{
+		stop("design is required, please refer to limma package for create design ")
+	}
+	
+	norm.d  = normalizeData(gr, method=norm.method)
+
+	#norm.d = norm.gr.list.T21.braf
+
+	exprs = norm.d$exprs
+	colnames(exprs)=paste("normalized.ratio", gr.names, sep=".")	
+        	methyC = norm.d$methyC
+	colnames(methyC)=paste("methyC", gr.names, sep=".")
+       	totalC = norm.d$totalC
+	colnames(totalC)=paste("totalC", gr.names, sep=".")
+	fr = cbind(rownames(methyC), exprs, methyC, totalC)
+	colnames(fr)[1]= "ID"
+
+	eSet = ExpressionSet(assayData=exprs)	
+	fit1 = lmFit(eSet, design)
+	fit2 <- eBayes(fit1)
+           res = topTable(fit2, num = dim(exprs)[1], coef="typewt")
+           res = res[,c(1:2, 5:6)]
+           colnames(res)[2:4] = paste(Treatment, colnames(res)[2:4],sep=".")
+	colnames(res) = gsub("logFC", "difference", colnames(res))
+           fr = merge(fr, res,by = "ID")
+}
+
+fr.T14minusT0 =  compareMethylation(braf.window.meanRatio.T14minusT0, Treatment =Treatment, gr.names=c("braf.T21minusT0.1", "braf.T21minusT0.2", "braf.T21minusT0.3", "wt.T21minusT0.1", "wt.T21minusT0.2", "wt.T21minusT0.3"),design=design, normalization.method="quantile")
+colnames(fr)[8:19] = gsub("minusT0", "", colnames(fr)[8:19])
+
+write.table(fr.T14minusT0, file=paste("brafT14minusT0", "vsWTmeanRatioWindow200step50CpGstatsAll.xls", sep=""), sep="\t", row.names=FALSE)
+
+fr.T21minusT0 =  compareMethylation(braf.window.meanRatio.T21minusT0, Treatment =Treatment, gr.names=c("braf.T21minusT0.1", "braf.T21minusT0.2", "braf.T21minusT0.3", "wt.T21minusT0.1", "wt.T21minusT0.2", "wt.T21minusT0.3"),design=design, normalization.method="quantile")
+colnames(fr)[8:19] = gsub("minusT0", "", colnames(fr)[8:19])
+
+write.table(fr.T21minusT0, file=paste("brafT21minusT0", "vsWTmeanRatioWindow200step50CpGstatsAll.xls", sep=""), sep="\t", row.names=FALSE)
+
+
+#### including single C, CpG island, geneBody, promoter, window, repeat elements, by chromosome
+compareData <- function(gr)
+{
+
+}
+annotateData <- function(gr)
+geneBody vs. promoter region analysis
+CpGisland
+
+plotData <- function(gr)
