@@ -1,0 +1,163 @@
+---
+title: "RRBSeq Vignette"
+author: "Jianhong Ou, Lihua Julie Zhu"
+date: "`r doc_date()`"
+package: "`r pkg_ver('RRBSeq')`"
+abstract: >
+  Analyze methylation data.
+vignette: >
+  %\VignetteIndexEntry{RRBSeq Vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+output:
+  BiocStyle::html_document
+---
+
+```{r, echo=FALSE, results="hide", warning=FALSE}
+suppressPackageStartupMessages({
+    library(BSgenome.Mmusculus.UCSC.mm10)
+    library(TxDb.Mmusculus.UCSC.mm10.knownGene)
+    library(org.Mm.eg.db)
+    library(RRBSeq)
+    library(limma)
+})
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+# Introduction
+
+The \Biocpkg{RRBSeq} is the first bioconductor package for Reduced Representation Bisulfite 
+Sequencing analysis. This vignette introduces analysis methods for methylation data 
+from high-throughput sequencing of bisulphite treated DNA to detect cytosine methylation.
+
+# Steps of using \Biocpkg{RRBSeq}
+
+We introduced `RRBSeqDataSet` class depend on `RangedSummarizedExperiment`. 
+
+## step1 import data
+Function `RRBSeqDataSet` is used to import data from text files into `RRBSeqDataSet` object.
+
+```{r importData}
+library(RRBSeq)
+
+extdata <- system.file("extdata", package="RRBSeq",
+                       mustWork=TRUE)
+methyRatioFiles <- dir(extdata, "_T.*\\.txt", full.names=TRUE)
+rrb <- RRBSeqDataSet(methyRatioFiles, 
+                     ind.chr=1, # 1st column is the chromosome,
+                     ind.pos=2, # 2nd column is the genomic locations,
+                     ind.strand=3, # 3rd column is the strand info,
+                     ind.ratio=5, # 5th column is the ratio of methylation,
+                     ind.totalC=6, # 6th column is the total counts of reads in that position,
+                     ind.methyC=7, # 7th column is the methylated counts,
+                     header=FALSE # there is not header in the file
+                     )
+raw <- rrb ## keep a copy for plotting
+```
+
+## step2 convert, summarize, and normalize the data
+
+```{r transform}
+##  transform data
+rrb <- transformData(rrb, transformation="asin")
+
+## summarize.sliding.window before compare
+rrb <- summarize.sliding.window(rrb, window.size=200L, step=50L, summarize="mean.ratio")
+
+## normalize the data
+rrb <- normalizeData(rrb, norm.method="quantiles")
+```
+## step3 get methylated spot
+### with duplicates
+```{r comparison}
+library(limma)
+# do comparison by default
+## create a design table
+g <- factor(gsub("^.*extdata.(.*?)_.*.txt", "\\1", methyRatioFiles))
+design <- model.matrix(~-1+g)
+design(rrb) <- design
+design(rrb)
+
+## make contrasts matrix
+contr.mat <- makeContrasts(contrasts=c("gBraf-gwt"), levels=design)
+contrasts.matrix(rrb) <- contr.mat
+contrasts.matrix(rrb)
+
+## do comparison
+res <- compareMethylation(rrb, coef=1, robust=FALSE)
+```
+
+You can also do comparison by yourself.
+
+```{r comparisonB}
+## get ratio for comparison
+eset <- ratio(rrb)
+## get methylated counts
+methyC <- methyC(rrb)
+## get total counts
+totalC <- totalC(rrb)
+```
+
+## step4 annotation
+CpG island score is the 'observed-to-expected CpG ratio' and it could be calculated by `CpGislandScore`.
+CpG island could also be annotated by an `GRanges` object. 
+Function `queryCpGFromUCSC` and `liftOverCpGs` could be used to prepare the `GRanges` object of CpG island.
+The gene symbol could be annotated by function `annotateGeneInfo`.
+```{r annotation, warning=FALSE, message=FALSE}
+library(BSgenome.Mmusculus.UCSC.mm10)
+res$CpGislandScore <- CpGislandScore(res, genome=Mmusculus)
+res.s <- res[res$CpGislandScore>=.65 & res$P.Value<0.05]
+
+CpGs <- queryCpGFromUCSC("Mus musculus")
+mcols(CpGs)
+mm9.CpGs <- CpGs[[1]]
+mm10.CpGs <- liftOverCpGs(mm9.CpGs, from="mm9", to="mm10")
+mm10.CpGs <- unlist(mm10.CpGs)
+
+res.s <- annotateCpGisland(res.s, mm10.CpGs)
+
+library(EnsDb.Mmusculus.v79)
+annotation <- genes(EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- seqlevelsStyle(res.s)
+res.s <- annotateGeneInfo(res.s, annotation)
+```
+
+## step5 plot the results
+```{r plot, width=8, height=5}
+library(TxDb.Mmusculus.UCSC.mm10.knownGene)
+library(org.Mm.eg.db)
+symbol <- res.s$symbol[1]
+plotMethy(res.s, TxDb.Mmusculus.UCSC.mm10.knownGene, org.Mm.eg.db, gene=symbol)
+plotMethy(res.s, TxDb.Mmusculus.UCSC.mm10.knownGene, org.Mm.eg.db, gene=symbol, type="circle")
+plotMethy(raw, TxDb.Mmusculus.UCSC.mm10.knownGene, org.Mm.eg.db, gene=symbol)
+```
+
+# For data without duplicates
+```{r}
+## No duplicates
+methyRatioFiles.s <- methyRatioFiles[grepl("T0", methyRatioFiles)]
+rrb <- RRBSeqDataSet(methyRatioFiles.s)
+
+##  transform data
+rrb <- transformData(rrb, transformation="asin")
+
+## summarize.sliding.window before compare
+rrb <- summarize.sliding.window(rrb, window.size=200L, step=50L, summarize="mean.ratio")
+
+## normalize the data
+
+rrb <- normalizeData(rrb, norm.method="quantiles")
+
+# do comparison by default
+g <- factor(gsub("^.*extdata.(.*?)_.*.txt", "\\1", methyRatioFiles.s))
+design <- model.matrix(~-1+g)
+design(rrb) <- design
+design(rrb)
+
+res <- compareMethylation(rrb, method="fdr")
+```
+
+# Session Info
+```{r sessionInfo, results='asis'}
+sessionInfo()
+```

@@ -1,0 +1,15 @@
+seqnames	start	strand	methyC	totalC	ratio
+chrA	1	*	2	5	0.4
+chrA	4	*	7	10	0.7
+chrA	6	*	3	10	0.3
+chrA	8	*	1	10	0.1
+chrA	10	*	1	9	0.111111111111111
+chrA	100	*	1	8	0.125
+chrA	200	*	3	12	0.25
+chrA	220	*	6	20	0.3
+chrA	250	*	7	30	0.233333333333333
+chrA	300	*	9	16	0.5625
+chrA	600	*	1	10	0.1
+chrB	1	*	1	10	0.1
+chrB	3	*	1	10	0.1
+chrB	6	*	1	10	0.1

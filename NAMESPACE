@@ -1,1 +1,39 @@
 
+importFrom("grDevices", "rainbow")
+importFrom("stats", "fisher.test", "p.adjust")
+importFrom("utils", "read.table")
+importFrom(preprocessCore, normalize.quantiles, normalize.quantiles.robust,
+                           colSummarizeAvg, colSummarizeMedian)
+import(Biobase)
+import(BiocGenerics)
+import(methods)
+import(S4Vectors)
+importFrom(Biostrings, letterFrequency, vcountPattern)
+import(IRanges)
+import(GenomicRanges)
+import(SummarizedExperiment)
+importFrom(limma, lmFit, contrasts.fit, eBayes, topTable)
+importFrom(GenomeInfoDb, seqlevelsStyle, "seqlevelsStyle<-")
+importFrom(AnnotationHub, AnnotationHub, query)
+importFrom(rtracklayer, liftOver)
+importFrom(ChIPpeakAnno, annoPeaks, reCenterPeaks)
+importFrom(trackViewer, lolliplot, geneModelFromTxdb)
+importMethodsFrom(BSgenome, getSeq)
+
+exportClasses("RRBSeqDataSet")
+exportMethods("ratio", "methyC", "totalC", 
+              "ratio<-", "methyC<-", "totalC<-",
+              "design", "design<-",
+              "contrasts.matrix", "contrasts.matrix<-",
+              "sampleNames", "sampleNames<-",
+              "transformData", 
+              "summarize.sliding.window",
+              "normalizeData")
+export(RRBSeqDataSet,
+       compareMethylation,
+       CpGislandScore,
+       queryCpGFromUCSC,
+       liftOverCpGs,
+       annotateCpGisland,
+       annotateGeneInfo,
+       plotMethy)

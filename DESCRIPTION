@@ -1,22 +1,27 @@
 Package: RRBSeq
 Type: Package
-Title: Identification of Novel alternative PolyAdenylation Sites (PAS)
+Title: Reduced Representation Bisulfite Sequencing toolbox
 Version: 0.0.1
 Date: 2015-05-14
 Authors@R: c(person("Jianhong Ou", "Developer", role = c("aut", "cre"),
-        email = "jianhong.ou@umassmed.edu"), person("Lihua Julie Zhu",
-        "Developer", role = "aut", email = "Julie.Zhu@umassmed.edu"))
-Author: Jianhong Ou, Michael R. Green and Lihua Julie Zhu
+        email = "jianhong.ou@umassmed.edu"), person("Jun Yu",
+        "Developer", role = "aut", email = "Jun.Yu@umassmed.edu"), 
+        person("Lihua Julie Zhu", "Developer", role = "aut",
+        email = "Julie.Zhu@umassmed.edu"))
+Author: Jianhong Ou, Jun Yu and Lihua Julie Zhu
 Maintainer: Jianhong Ou <jianhong.ou@umassmed.edu>
-Description: Alternative polyadenylation (APA) is one of the important 
-             post-transcriptional regulation mechanisms which occurs in 
-             most human genes. InPAS facilitates the discovery of novel 
-             APA sites from RNAseq data. It leverages cleanUpdTSeq to fine 
-             tune identified APA sites.
-biocViews: RNASeq, Sequencing, AlternativeSplicing, Coverage,
-        DifferentialSplicing, GeneRegulation, Transcription
+Description: Estimate variance-mean dependence in count data from 
+            Reduced Representation Bisulfite sequencing assays and
+            test for differentail methylation.
+biocViews: RNASeq, Sequencing, Methylation, GeneRegulation
 License: GPL (>= 2)
 Lazyload: yes
-Imports: limma, preprocessCore, ChIPpeakAnno
-Depends: R (>= 3.1), methods, Biobase, GenomicRanges
-Suggests: RUnit, BiocGenerics, BiocStyle
+Imports: grDevices, stats, utils, 
+         limma, ChIPpeakAnno, rtracklayer, Biostrings, AnnotationHub, 
+         trackViewer, preprocessCore, S4Vectors, GenomeInfoDb, BiocGenerics,
+         BSgenome
+Depends: R (>= 3.1), methods, Biobase, IRanges, GenomicRanges, SummarizedExperiment
+Suggests: RUnit, BiocStyle, knitr,
+          BSgenome.Mmusculus.UCSC.mm10, EnsDb.Mmusculus.v79,
+          TxDb.Mmusculus.UCSC.mm10.knownGene, org.Mm.eg.db
+VignetteBuilder: knitr
